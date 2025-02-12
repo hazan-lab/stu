@@ -91,7 +91,6 @@ config_data.setdefault("torch_compile", False)
 config_data.setdefault("seed", 1746)
 
 SEED = config_data["seed"]
-
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
@@ -139,15 +138,15 @@ torch_compile = config_data["torch_compile"]
 normalize_dataset = config_data["normalize_dataset"]
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-num_examples = 5000
-num_regimes = 1
-noise_level = 0.05
-obs_noise = 0.05
-stability_factor = 0.9999
+num_examples = config_data["num_examples"]
+num_regimes = config_data["num_regimes"]
+noise_level = config_data["noise_level"]
+obs_noise = config_data["obs_noise"]
+stability_factor = config_data["stability_factor"]
 min_duration = seq_len // num_regimes
-randomness_factor = 0.0 if num_regimes == 1 else 0.1
-symmetric = True
-lr = 3e-4
+randomness_factor = 0.0 if num_regimes == 1 else config_data["randomness_factor"]
+symmetric = config_data["symmetric"]
+lr = config_data["lr"]
 
 
 config = SpectralSSMConfig(
@@ -191,12 +190,14 @@ else:
         dtype=torch_dtype,
     )
 
+print("Configs:")
+for key, value in config_data.items():
+    print(f"  {key}: {value}")
 
 model = SpectralSSM(config, spectral_filters).to(device=device, dtype=torch_dtype)
 if torch_compile and not use_flash_fft:
     apply_compile(model)
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-
 
 dataset = generate_lds(
     num_examples=num_examples,

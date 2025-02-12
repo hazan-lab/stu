@@ -27,7 +27,6 @@
   "noise_level": 0.05,
   "obs_noise": 0.05,
   "stability_factor": 0.9999,
-  "min_duration": 512,
-  "randomness_factor": 0.0,
+  "randomness_factor": 0.1,
   "symmetric": true
 }

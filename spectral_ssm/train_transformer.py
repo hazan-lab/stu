@@ -59,9 +59,7 @@ config_data.setdefault("d_in", 4)
 config_data.setdefault("dim", 32)
 config_data.setdefault("head_dim", 8)
 config_data.setdefault("num_layers", 2)
-dim = config_data["dim"]
-head_dim = config_data["head_dim"]
-config_data.setdefault("num_heads", dim // head_dim)
+config_data.setdefault("num_heads", config_data["dim"] // config_data["head_dim"])
 config_data.setdefault("d_h", 3)
 config_data.setdefault("d_out", 4)
 config_data.setdefault("seq_len", 256)
@@ -134,6 +132,10 @@ config = TransformerConfig(
     torch_dtype=torch_dtype,
     device=device,
 )
+
+print("Configs:")
+for key, value in vars(config).items():
+    print(f"  {key}: {value}")
 
 model = Transformer(config).to(device=device, dtype=torch_dtype)
 if torch_compile:
