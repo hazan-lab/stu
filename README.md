@@ -107,7 +107,7 @@ This free open-source software is MIT-licensed. See the [LICENSE](LICENSE) file 
 If you use this repository or find our work valuable, please consider citing it:
 
 ```
-@article{spectralssm,
+@misc{spectralssm,
       title={Spectral State Space Models}, 
       author={Naman Agarwal and Daniel Suo and Xinyi Chen and Elad Hazan},
       year={2024},
