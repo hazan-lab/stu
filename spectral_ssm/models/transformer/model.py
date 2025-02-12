@@ -293,7 +293,7 @@ class Transformer(PreTrainedModel):
                 torch.nn.init.zeros_(module.c_proj.bias)
 
 if __name__ == "__main__":
-    config_path = "transformer/config.json"
+    config_path = "config.json"
 
     with open(config_path, "r") as f:
         config_data = json.load(f)
@@ -330,13 +330,7 @@ if __name__ == "__main__":
         print(f"  {key}: {value}")
 
     model = Transformer(configs).to(device=device, dtype=torch_dtype)
-    
-    x = torch.randint(
-        0, 32, 
-        (config_data["bsz"], config_data["seq_len"]), 
-        dtype=torch.long
-    ).to(device)
-
+    x = torch.randn(configs.bsz, configs.seq_len, configs.d_in, device=device, dtype=torch_dtype)
     outputs = model(x)
 
     print("Output shape:", outputs.shape)

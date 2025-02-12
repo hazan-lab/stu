@@ -521,6 +521,7 @@ class SpectralSSMConfig(PretrainedConfig):
 
     def __init__(
         self,
+        bsz: int = 1,
         num_layers: int = 2,
         d_in: int = 32,
         dim: int = 32,
@@ -547,6 +548,7 @@ class SpectralSSMConfig(PretrainedConfig):
         super().__init__(**kwargs)
         
         # Model structural parameters
+        self.bsz = bsz
         self.num_layers = num_layers
         self.d_in = d_in
         self.dim = dim
@@ -687,7 +689,7 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():
-        device = torch.device("mps")
+        device = torch.device("mps")  # MPS support for PyTorch still highly sus
     else:
         device = torch.device("cpu")
     print("Device:", device)
@@ -703,7 +705,7 @@ if __name__ == "__main__":
         d_out=config_data["d_out"],
         seq_len=config_data["seq_len"],
         bias=config_data["bias"],
-        num_filters=config_data["num_filters"],
+        num_filters=config_data["num_filters"] or math.ceil(math.log(config_data["seq_len"])),
         k_y=config_data["k_y"],
         k_u=config_data["k_u"],
         learnable_M_y=config_data["learnable_M_y"],
@@ -719,7 +721,7 @@ if __name__ == "__main__":
 
     filters = get_spectral_filters(
         seq_len=config_data["seq_len"],
-        K=config_data["num_filters"],
+        K=config_data["num_filters"] or math.ceil(math.log(config_data["seq_len"])),
         use_hankel_L=config_data["use_hankel_L"],
         device=device,
         dtype=torch_dtype,
@@ -731,11 +733,7 @@ if __name__ == "__main__":
 
     # instantiate the model and move it to device/dtype
     model = SpectralSSM(configs, filters).to(device=device, dtype=torch_dtype)
-
-
-    # create dummy input with shape (batch_size, seq_len, d_in)
-    x = torch.randn(2, configs.seq_len, configs.d_in, device=device, dtype=torch_dtype)
-
+    x = torch.randn(configs.bsz, configs.seq_len, configs.d_in, device=device, dtype=torch_dtype)
     outputs = model(x)
 
     print("Output shape:", outputs.shape)
