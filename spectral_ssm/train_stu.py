@@ -151,6 +151,7 @@ lr = 3e-4
 
 
 config = SpectralSSMConfig(
+    bsz=bsz,
     num_layers=num_layers,
     d_in=d_in,
     dim=dim,
