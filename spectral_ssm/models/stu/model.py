@@ -731,7 +731,6 @@ if __name__ == "__main__":
     for key, value in vars(configs).items():
         print(f"  {key}: {value}")
 
-    # instantiate the model and move it to device/dtype
     model = SpectralSSM(configs, filters).to(device=device, dtype=torch_dtype)
     x = torch.randn(configs.bsz, configs.seq_len, configs.d_in, device=device, dtype=torch_dtype)
     outputs = model(x)

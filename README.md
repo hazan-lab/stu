@@ -22,8 +22,7 @@ Create a virtual environment with one of the following options:
 
 Conda:
 ```zsh
-envsubst < environment_template.yml > environment.yml
-conda env create -f environment.yml
+conda create -n stu pytorch pytorch-cuda=12.4 uv -c pytorch -c nvidia -c conda-forge -y
 ```
 
 uv:
@@ -36,32 +35,15 @@ Python/pip:
 python3 -m venv --prompt stu .venv
 ```
 
-### Small Remark Regarding Conda
-
-If your HPC environment uses Conda, you can initialize your virtual environment with Conda and use uv afterwards.
-
-If you already have an existing Conda environment, you can run
-
-```zsh
-conda env update --name your_existing_env_name --file environment.yml --prune
-```
-
-Note that `--prune` will remove packages that aren’t listed in the yml file, helping to bring the environment into exact alignment with what’s specified. You can remove this flag if you'd like.
-
-For a fully reproducible environment, you might prefer creating one from an explicit spec file via:
-
-```zsh
-conda create --name new_env_name --file spec-file.txt
-```
-
 ---
 
+Don't forget to activate your environment once you've created it.
 
 ### 2. Installing packages:
 
 > Note: If you want to use [Flash FFT](https://github.com/HazyResearch/flash-fft-conv) and/or [Flash Attention](https://github.com/Dao-AILab/flash-attention), you will need to have a CUDA-enabled device. Please see their repositories for further instructions on installation.
 
-Install the required packages with:
+In the root folder of the project, where [`pyproject.toml`](pyproject.toml) resides, you can install the required packages with:
 
 uv:
 ```python3
@@ -135,6 +117,7 @@ If you use this repository or find our work valuable, please consider citing it:
       url={https://arxiv.org/abs/2312.06837}, 
 }
 ```
+
 ```
 @misc{flashstu,
       title={Flash STU: Fast Spectral Transform Units}, 
