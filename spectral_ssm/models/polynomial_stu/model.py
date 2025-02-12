@@ -143,6 +143,155 @@ def get_tensorized_spectral_filters(
     filters = torch.kron(phi_i, phi_j)
     return filters
 
+def get_optimal_degree(seq_len: int) -> int:
+    """
+    Get optimal polynomial degree per Theorem 2: n = (7/6)log_2(T).
+    """
+    return int(math.ceil((7/6) * math.log2(seq_len)))
+
+def get_monic_chebyshev_coeffs(n: int) -> torch.Tensor:
+    """
+    TODO: Maybe this should be of 2nd kind, wait on what Elad says
+
+    Get coefficients of monic n-th Chebyshev polynomial in descending order.
+    Returns coefficients [c_n, c_{n-1}, ..., c_0] as complex128 tensor.
+    """
+    def chebyshev_t_int(n: int) -> list[int]:
+        """Compute T_n coefficients exactly in integer arithmetic."""
+        if n == 0:
+            return [1]
+        elif n == 1:
+            return [1, 0]
+        
+        T0 = [1]       # T_0(x) = 1
+        T1 = [1, 0]    # T_1(x) = x
+        
+        # Use recurrence T_n = 2xT_{n-1} - T_{n-2}
+        for _ in range(2, n + 1):
+            # Multiply T_{k-1} by 2x: scale by 2 and append 0
+            T2 = [2*c for c in T1] + [0]
+            
+            # Subtract T_{k-2} with proper padding
+            d = len(T2) - len(T0)
+            padded_T0 = [0] * d + T0
+            T2 = [a - b for a, b in zip(T2, padded_T0, strict=True)]
+            
+            T0, T1 = T1, T2
+            
+        return T2
+    
+    # Get standard Chebyshev coefficients and make monic
+    coeffs = torch.tensor(chebyshev_t_int(n), dtype=torch.complex128)
+    if n > 0:
+        coeffs = coeffs / (2.0 ** (n - 1))
+    return coeffs
+
+def get_polynomial_hankel_matrix(
+    seq_len: int,
+    p_coeffs: torch.Tensor,
+    beta: float = 1/64,
+    num_points: int = 601
+) -> torch.Tensor:
+    """
+    Compute complex Hankel matrix by integrating over complex plane.
+    
+    Args:
+        seq_len: Length of sequence
+        p_coeffs: Polynomial coefficients
+        beta: Bound on imaginary components
+        num_points: Number of quadrature points
+        
+    Returns:
+        Complex Hankel matrix of shape (seq_len, seq_len)
+    """
+    p_coeffs = p_coeffs.to(torch.complex128)
+
+    # Integration grid
+    xs = torch.linspace(-1.0, 1.0, num_points, dtype=torch.float64)
+    y_max = min(beta, 1.0)
+    ys = torch.linspace(-1.0, y_max, num_points, dtype=torch.float64)
+    X, Y = torch.meshgrid(xs, ys, indexing="ij")
+    dx = xs[1] - xs[0]
+    dy = ys[1] - ys[0]
+
+    # Mask for unit disk
+    mask = X**2 + Y**2 <= 1.0
+
+    # Evaluate polynomial at complex points
+    alpha = torch.complex(X[mask], Y[mask])
+    
+    def eval_poly(z: torch.Tensor, coeffs: torch.Tensor) -> torch.Tensor:
+        """
+        Evaluate polynomial using Horner's method.
+        
+        Args:
+            z: Points to evaluate at
+            coeffs: Polynomial coefficients [a_n, a_{n-1}, ..., a_0]
+        """
+        result = coeffs[0].expand_as(z)
+        for c in coeffs[1:]:
+            result = result * z + c
+        return result
+
+    val_p = eval_poly(alpha, p_coeffs)
+    val_pc = eval_poly(alpha.conj(), p_coeffs)
+    fac = val_p * val_pc
+
+    # Compute powers matrix 
+    i_indices = torch.arange(seq_len, dtype=torch.float64).to(torch.complex128)
+    powers_alpha = alpha.unsqueeze(1) ** i_indices
+    powers_alpha_conj = alpha.conj().unsqueeze(1) ** i_indices
+
+    # Final matrix via batch operations
+    Z = torch.einsum("n,ni,nj->ij", fac, powers_alpha, powers_alpha_conj)
+
+    return Z * (dx * dy)
+
+def get_polynomial_spectral_filters(
+    seq_len: int,
+    k: int,
+    device: torch.device = None,
+    dtype: torch.dtype = torch.bfloat16,
+    tol: float = 1e-14
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Get spectral filters for asymmetric LDS via complex Hankel matrix.
+    
+    Args:
+        seq_len: Length of sequence
+        k: Number of filters to return
+        p_coeffs: Polynomial coefficients 
+        beta: Bound on imaginary components
+        device: Output device
+        dtype: Output dtype
+        tol: Tolerance for eigenvalue positivity check
+        
+    Returns:
+        Tuple of (eigenvalues, eigenvectors) of shapes (k,) and (seq_len, k)
+    """
+    # Get optimal parameters from Theorem 2
+    n = get_optimal_degree(seq_len)
+    beta = 1.0 / (64 * n * n)
+    
+    # Get Chebyshev polynomial coefficients
+    p_coeffs = get_monic_chebyshev_coeffs(n)
+    
+    # Compute complex Hankel matrix using equations (2) and (3)
+    Z = get_polynomial_hankel_matrix(seq_len, p_coeffs, beta)
+    
+    # Get spectral filters via eigendecomposition
+    sigma, phi = torch.linalg.eigh(Z, UPLO="U")
+
+    # Verify eigenvalue positivity per paper
+    if not (sigma > -tol).all():
+        raise ValueError(f"Expected positive eigenvalues, got min={sigma.min()}")
+
+    # Take top k eigenpairs
+    sigma_k = sigma[-k:].to(device=device, dtype=dtype)  # TODO: Should we do the ** 0.25 thing here?
+    phi_k = phi[:, -k:].to(device=device, dtype=dtype)
+
+    return phi_k.to(device=device, dtype=dtype)
+
 def conv(u: torch.Tensor, v: torch.Tensor, n: int, use_tensordot: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Args:
@@ -403,6 +552,7 @@ class STU(nn.Module):
         self.k_u = config.k_u
         self.k_y = config.k_y
         self.use_teacher_forcing = config.use_teacher_forcing
+        self.use_polynomial_spectral_filters = config.use_polynomial_spectral_filters
         self.use_norm = config.use_norm
 
         # Parameterizable matrix Mᵘ, Mᵠ⁺, and Mᵠ⁻, per section 3
@@ -536,6 +686,7 @@ class SpectralSSMConfig(PretrainedConfig):
         use_hankel_L: bool = False,
         use_flash_fft: bool = False,
         use_teacher_forcing: bool = False,
+        use_polynomial_spectral_filters: bool = False,
         use_norm: bool = True,
         mlp_scale: int = 4,
         dropout: float = 0.1,
@@ -566,6 +717,7 @@ class SpectralSSMConfig(PretrainedConfig):
         self.use_hankel_L = use_hankel_L
         self.use_flash_fft = use_flash_fft
         self.use_teacher_forcing = use_teacher_forcing
+        self.use_polynomial_spectral_filters = use_polynomial_spectral_filters
         self.use_norm = use_norm
         self.use_mlp = use_mlp
         self.mlp_scale = mlp_scale

@@ -9,17 +9,15 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from spectral_ssm.lds import generate_lds
-from spectral_ssm.models.stu import (
+from spectral_ssm.models.polynomial_stu import (
     SpectralSSM, 
     SpectralSSMConfig, 
-    get_spectral_filters, 
-    get_tensorized_spectral_filters, 
     get_polynomial_spectral_filters,
 )
 
 torch.set_float32_matmul_precision("high")
 
-config_path = "models/stu/config.json"
+config_path = "models/polynomial_stu/config.json"
 with open(config_path, "r") as f:
     config_data = json.load(f)
 
@@ -85,7 +83,6 @@ config_data.setdefault("learnable_M_y", True)
 config_data.setdefault("use_mlp", True)
 config_data.setdefault("use_tensordot", False)
 config_data.setdefault("use_hankel_L", False)
-config_data.setdefault("use_tensorized_filters", False)
 config_data.setdefault("use_flash_fft", False)
 config_data.setdefault("use_teacher_forcing", False)
 config_data.setdefault("use_norm", False)
@@ -110,19 +107,7 @@ d_h = config_data["d_h"]
 d_out = config_data["d_out"]
 seq_len = config_data["seq_len"]
 bias = config_data["bias"]
-
-use_tensorized_filters = config_data["use_tensorized_filters"]
-use_polynomial_spectral_filters = config_data["use_polynomial_spectral_filters"]
-
-# Can only use one of three (default, tensorized, or polynomial)
-assert sum([use_tensorized_filters, use_polynomial_spectral_filters]) <= 1, \
-    "Can only use one filter type: default, tensorized, or polynomial"
-
-# If num_filters is not provided, compute one based on whether we're using tensorized filters.
-if use_tensorized_filters:
-    num_filters = config_data["num_filters"] or math.ceil(math.sqrt(seq_len))
-else:
-    num_filters = config_data["num_filters"] or math.ceil(math.log(seq_len))
+num_filters = config_data["num_filters"] or math.ceil(math.log(seq_len))
 
 print(f"Number of spectral filters: {num_filters}")
 
@@ -184,32 +169,12 @@ config = SpectralSSMConfig(
     device=device,
 )
 
-if use_tensorized_filters:
-    spectral_filters = get_tensorized_spectral_filters(
-        n=seq_len,
-        k=num_filters,
-        use_hankel_L=use_hankel_L,
-        device=device,
-        dtype=torch_dtype,
-    )
-elif use_polynomial_spectral_filters:
-    _, spectral_filters = get_polynomial_spectral_filters(
+spectral_filters = get_polynomial_spectral_filters(
         seq_len=seq_len,
         k=num_filters,
         device=device,
         dtype=torch_dtype,
     )
-else:
-    spectral_filters = get_spectral_filters(
-        seq_len=seq_len,
-        K=num_filters,
-        use_hankel_L=use_hankel_L,
-        device=device,
-        dtype=torch_dtype,
-    )
-
-print("Spectral filters shape (phi):", spectral_filters[0].shape)
-print("Spectral filters shape (sigma):", spectral_filters[1].shape)
 
 print("Configs:")
 for key, value in config_data.items():
@@ -290,8 +255,8 @@ ax.legend(frameon=True, facecolor="white", framealpha=0.95, fontsize=12)
 ax.grid(True, alpha=0.15)
 
 plt.tight_layout(pad=2.0)
-plt.savefig("plots/stu_performance.png", dpi=300, bbox_inches="tight")
+plt.savefig("plots/polynomial_stu_performance.png", dpi=300, bbox_inches="tight")
 plt.close()
 
 print(f"\nFinal MSE: {mse:.4f}\n")
-print("Plot saved to plots/stu_performance.png")
+print("Plot saved to plots/polynomial_stu_performance.png")
