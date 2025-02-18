@@ -3,5 +3,4 @@ from .model import (
     SpectralSSMConfig, 
     get_spectral_filters, 
     get_tensorized_spectral_filters,
-    get_complex_spectral_filters,
 )

@@ -70,7 +70,7 @@ def integrate_polar_monomial(a, b, beta):
 def get_polynomial_hankel(
     n, beta, t, chunk_size=2048, device="cuda", dtype=torch.bfloat16
 ):
-    """ """
+    """Get the polynomial Hankel matrix."""
     matrix_size = t - n
 
     # Compute Chebyshev coefficients
@@ -94,9 +94,9 @@ def get_polynomial_hankel(
     for i_start in range(0, matrix_size, chunk_size):
         # Create i indices
         i_end = min(i_start + chunk_size, matrix_size)
-        i_vals = torch.arange(
-            i_start, i_end, device=device, dtype=torch.float32
-        ).view(-1, 1, 1, 1)
+        i_vals = torch.arange(i_start, i_end, device=device, dtype=torch.float32).view(
+            -1, 1, 1, 1
+        )
 
         for j_start in range(0, matrix_size, chunk_size):
             # Create j indices
@@ -123,7 +123,10 @@ def get_polynomial_hankel(
 
 if __name__ == "__main__":
     import time
-    from spectral_ssm.models.polynomial_stu.model import get_opt_degree, get_polynomial_spectral_filters
+    from spectral_ssm.models.polynomial_stu.model import (
+        get_opt_degree,
+        get_polynomial_spectral_filters,
+    )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     SEQ_LEN = 8192
@@ -133,7 +136,9 @@ if __name__ == "__main__":
     print(f"Constructing {k} spectral filters for sequence length {SEQ_LEN - n}...\n")
 
     start = time.perf_counter()
-    polynomial_filters = get_polynomial_spectral_filters(seq_len=SEQ_LEN, k=k, device=device)
+    polynomial_filters = get_polynomial_spectral_filters(
+        seq_len=SEQ_LEN, k=k, device=device
+    )
     end = time.perf_counter()
 
     print(f"Time taken: {end - start:.2f} seconds")

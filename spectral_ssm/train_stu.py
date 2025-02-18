@@ -1,6 +1,7 @@
 import time
 import json
 import math
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,18 +11,19 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from spectral_ssm.lds import generate_lds
 from spectral_ssm.models.stu import (
-    SpectralSSM, 
-    SpectralSSMConfig, 
-    get_spectral_filters, 
-    get_tensorized_spectral_filters, 
-    get_polynomial_spectral_filters,
+    SpectralSSM,
+    SpectralSSMConfig,
+    get_spectral_filters,
+    get_tensorized_spectral_filters,
 )
 
 torch.set_float32_matmul_precision("high")
 
-config_path = "models/stu/config.json"
+curr_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(curr_dir, "models/stu/config.json")
 with open(config_path, "r") as f:
     config_data = json.load(f)
+
 
 def apply_compile(model: nn.Module) -> None:
     """
@@ -34,19 +36,21 @@ def apply_compile(model: nn.Module) -> None:
         compiled_layer = torch.compile(layer, mode="max-autotune", fullgraph=True)
         model.layers.register_module(idx, compiled_layer)
     end = time.perf_counter()
-    print(f"Finished compiling each {model.__class__.__name__} layer in {end - start:.4f} seconds.")
+    print(
+        f"Finished compiling each {model.__class__.__name__} layer in {end - start:.4f} seconds."
+    )
 
 
 def normalize(dataset: TensorDataset) -> tuple[TensorDataset, dict[str, torch.Tensor]]:
     """Normalizes a dataset using pure torch functions over the batch and time dimensions."""
     inputs, targets = dataset[:]
-    
+
     input_mean = inputs.mean(dim=(0, 1), keepdim=True)
-    input_std  = inputs.std(dim=(0, 1), keepdim=True).clamp(min=1e-8)
+    input_std = inputs.std(dim=(0, 1), keepdim=True).clamp(min=1e-8)
     inputs_norm = (inputs - input_mean) / input_std
 
     target_mean = targets.mean(dim=(0, 1), keepdim=True)
-    target_std  = targets.std(dim=(0, 1), keepdim=True).clamp(min=1e-8)
+    target_std = targets.std(dim=(0, 1), keepdim=True).clamp(min=1e-8)
     targets_norm = (targets - target_mean) / target_std
 
     print("\nInput Statistics per Dimension:")
@@ -63,10 +67,11 @@ def normalize(dataset: TensorDataset) -> tuple[TensorDataset, dict[str, torch.Te
         "target_mean": target_mean.squeeze(),
         "target_std": target_std.squeeze(),
         "input_dims": inputs.shape[-1],
-        "output_dims": targets.shape[-1]
+        "output_dims": targets.shape[-1],
     }
-    
+
     return TensorDataset(inputs_norm, targets_norm), stats
+
 
 config_data.setdefault("epochs", 1)
 config_data.setdefault("bsz", 1)
@@ -112,17 +117,13 @@ seq_len = config_data["seq_len"]
 bias = config_data["bias"]
 
 use_tensorized_filters = config_data["use_tensorized_filters"]
-use_polynomial_spectral_filters = config_data["use_polynomial_spectral_filters"]
 
-# Can only use one of three (default, tensorized, or polynomial)
-assert sum([use_tensorized_filters, use_polynomial_spectral_filters]) <= 1, \
-    "Can only use one filter type: default, tensorized, or polynomial"
-
-# If num_filters is not provided, compute one based on whether we're using tensorized filters.
-if use_tensorized_filters:
-    num_filters = config_data["num_filters"] or math.ceil(math.sqrt(seq_len))
-else:
-    num_filters = config_data["num_filters"] or math.ceil(math.log(seq_len))
+# If num_filters is not provided, compute one based on whether we're using tensorized filters
+num_filters = config_data["num_filters"] or (
+    math.ceil(math.sqrt(seq_len))
+    if use_tensorized_filters
+    else math.ceil(math.log(seq_len))
+)
 
 print(f"Number of spectral filters: {num_filters}")
 
@@ -192,13 +193,6 @@ if use_tensorized_filters:
         device=device,
         dtype=torch_dtype,
     )
-elif use_polynomial_spectral_filters:
-    _, spectral_filters = get_polynomial_spectral_filters(
-        seq_len=seq_len,
-        k=num_filters,
-        device=device,
-        dtype=torch_dtype,
-    )
 else:
     spectral_filters = get_spectral_filters(
         seq_len=seq_len,
@@ -264,7 +258,10 @@ for epoch in range(epochs):
             )
 
 final_x, final_y = next(iter(train_loader))
-final_x, final_y = final_x.to(device=device, dtype=torch_dtype), final_y.to(device=device, dtype=torch_dtype)
+final_x, final_y = (
+    final_x.to(device=device, dtype=torch_dtype),
+    final_y.to(device=device, dtype=torch_dtype),
+)
 with torch.no_grad():
     final_out = model(final_x)
 
@@ -281,7 +278,9 @@ ax.plot(final_prediction, color="#8B5CF6", label="Prediction", linewidth=3)
 mse = np.mean((final_prediction - final_truth) ** 2)
 
 # Add shaded area between curves
-ax.fill_between(range(len(final_truth)), final_truth, final_prediction, color="#D1C4E9", alpha=0.9)
+ax.fill_between(
+    range(len(final_truth)), final_truth, final_prediction, color="#D1C4E9", alpha=0.9
+)
 
 ax.set_title(f"Model Predictions vs Ground Truth\nMSE: {mse:.4f}", fontsize=16, pad=15)
 ax.set_xlabel("Time Step", fontsize=14)
