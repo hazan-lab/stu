@@ -1,5 +1,5 @@
 {
-  "model_type": "spectral_ssm",
+  "model_type": "polynomial_stu",
   "epochs": 1,
   "bsz": 1,
   "lr": 3e-4,
@@ -23,9 +23,6 @@
   "learnable_M_y": true,
   "use_mlp": false,
   "use_tensordot": false,
-  "use_hankel_L": false,
-  "use_tensorized_filters": false,
-  "use_polynomial_spectral_filters": true,
   "use_flash_fft": false,
   "use_teacher_forcing": false,
   "use_norm": false,
