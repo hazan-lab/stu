@@ -1,3 +1,3 @@
 # Tests
 
-Experimental throwaway files that may be useful references in the future.
+Experimental throwaway / test files that may be useful references in the future.

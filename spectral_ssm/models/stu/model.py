@@ -143,7 +143,6 @@ def get_tensorized_spectral_filters(
     filters = torch.kron(phi_i, phi_j)
     return filters
 
-
 def conv(u: torch.Tensor, v: torch.Tensor, n: int, use_tensordot: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Args:
