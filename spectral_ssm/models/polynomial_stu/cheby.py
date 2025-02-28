@@ -52,7 +52,7 @@ def normalized_chebyshev_coeff(n):
 def integrate_polar_monomial(a, b, beta):
     """
     Compute the integral of z^a * z̄^b over the polar wedge:
-      r ∈ [0, 1], θ ∈ [-beta, beta],
+      r ∈ [0, 1], θ ∈ [-beta, beta] U [π-beta, π+beta].
     in closed form:
       if a==b: 2*beta/(a+b+2)
       else:   2*sin((a-b)*beta)/((a-b)*(a+b+2))
@@ -60,11 +60,16 @@ def integrate_polar_monomial(a, b, beta):
     """
     diff = a - b
     denom = a + b + 2
-    return torch.where(
-        condition=diff == 0,
-        input=2 * beta / denom,
-        other=2 * torch.sin(diff * beta) / (diff * denom),
+    result = torch.where(
+        (diff % 2 != 0),
+        torch.tensor(0.0, dtype=diff.dtype, device=diff.device),
+        torch.where(
+            diff == 0,
+            2 * beta / denom,
+            2 * torch.sin(diff * beta) / (diff * denom)
+        )
     )
+    return result
 
 
 def get_polynomial_hankel(
